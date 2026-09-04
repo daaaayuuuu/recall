@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="720" viewBox="0 0 900 720">
+  <rect width="900" height="720" fill="white"/>
+  <rect x="24" y="24" width="852" height="672" fill="none" stroke="black" stroke-width="8"/>
+  <circle cx="690" cy="165" r="70" fill="none" stroke="black" stroke-width="9"/>
+  <path d="M55 600l230-260 130 140 115-115 315 235z" fill="none" stroke="black" stroke-width="10"/>
+  <path d="M335 610c45-125 118-187 218-187" fill="none" stroke="black" stroke-width="8" stroke-dasharray="15 14"/>
+  <text x="450" y="660" text-anchor="middle" font-family="sans-serif" font-size="34" font-weight="700">旅行照片 1</text>
+</svg>

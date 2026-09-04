@@ -1,0 +1,89 @@
+app:
+  environment: development
+  app_base_url: http://127.0.0.1:5173
+  play_base_url: http://127.0.0.1:5173
+  surface: all
+
+http:
+  address: :8080
+  static_dir: ""
+  trust_proxy_headers: false
+
+worker:
+  health_address: :8081
+  poll_interval: 5s
+
+database:
+  dsn: ${MYSQL_DSN}
+  max_open_conns: 20
+  max_idle_conns: 10
+  conn_max_lifetime: 5m
+
+storage:
+  endpoint: ${MINIO_ENDPOINT}
+  public_endpoint: ${MINIO_PUBLIC_ENDPOINT}
+  access_key: ${MINIO_ACCESS_KEY}
+  secret_key: ${MINIO_SECRET_KEY}
+  region: us-east-1
+  use_ssl: false
+  public_use_ssl: false
+
+admin:
+  username: ${ADMIN_USERNAME}
+  password_hash: ${ADMIN_PASSWORD_HASH}
+
+encryption:
+  active_key_version: 1
+  content_key_v1: ${CONTENT_ENCRYPTION_KEY_V1}
+  share_key_v1: ${SHARE_ENCRYPTION_KEY_V1}
+
+uploads:
+  max_concurrent_per_user: 3
+  stream_buffer_bytes: 1048576
+  staging_object_ttl_hours: 24
+
+generation:
+  lease_duration: 60s
+  max_executions: 3
+
+ai:
+  # Optional. An empty key makes polish return the original text with skipped=true.
+  text:
+    provider: deepseek
+    base_url: https://api.deepseek.com
+    api_key: ${DEEPSEEK_API_KEY}
+    model: deepseek-v4-flash
+    timeout: 30s
+    max_output_tokens: 2000
+  # Optional. An empty key skips moderation without blocking image uploads.
+  image_moderation:
+    provider: ""
+    base_url: ""
+    api_key: ""
+    model: ""
+    timeout: 20s
+    max_output_tokens: 300
+  # Optional. An empty key reuses the normalized source image.
+  image_to_image:
+    provider: ""
+    base_url: ""
+    api_key: ""
+    model: ""
+    quality: medium
+    timeout: 3m
+    max_input_bytes: 26214400
+    max_output_bytes: 26214400
+
+ai_settings:
+  enabled: true
+  # Development-only sample. Use a separate random 32-byte key in shared environments.
+  encryption_key_v1: AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+  encryption_key_version: 1
+  refresh_interval: 2s
+
+sharing:
+  max_link_lifetime_days: 90
+  play_session_minutes: 30
+
+log:
+  level: debug

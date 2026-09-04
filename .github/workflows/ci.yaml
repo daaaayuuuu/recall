@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4.10
+        env:
+          MYSQL_ROOT_PASSWORD: root_test
+          MYSQL_DATABASE: gamegen
+          MYSQL_USER: gamegen
+          MYSQL_PASSWORD: gamegen_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot_test --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.5
+          cache-dependency-path: backend/go.sum
+      - run: go mod download
+      - run: gofmt -d . && test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./cmd/api ./cmd/worker ./cmd/migrate
+      - name: Apply migrations to an empty database
+        env:
+          APP_ENVIRONMENT: test
+          MYSQL_DSN: gamegen:gamegen_test@tcp(127.0.0.1:3306)/gamegen?parseTime=true&loc=UTC&charset=utf8mb4&multiStatements=true
+        run: go run ./cmd/migrate -command up
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  compose-and-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate development scripts
+        run: bash -n scripts/*.sh
+      - name: Validate development Compose file
+        run: docker compose --env-file deploy/compose/dev/.env.example -f deploy/compose/dev/compose.yaml config --quiet
+      - name: Validate single-host production Compose file
+        run: docker compose --env-file deploy/compose/prod/.env.example -f deploy/compose/prod/compose.yaml config --quiet
+      - name: Validate Railway initialization script
+        run: sh -n deploy/railway/minio-init.sh
+      - name: Build unified application image
+        run: >-
+          docker build
+          --build-arg APP_VERSION=ci
+          --build-arg VCS_REF=${{ github.sha }}
+          -f deploy/docker/app.Dockerfile
+          -t game-gen:test .
+      - name: Build Railway MinIO initialization image
+        run: docker build -f deploy/railway/minio-init.Dockerfile -t game-gen-minio-init:test .

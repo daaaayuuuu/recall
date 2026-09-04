@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Go
+bin/
+*.test
+*.out
+coverage.out
+
+# Local services and runtime data
+.data/
+tmp/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+

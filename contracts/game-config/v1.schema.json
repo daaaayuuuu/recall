@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gamegen.local/contracts/game-config/v1.schema.json",
+  "title": "game-gen versioned game configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["templateId", "templateVersion", "configVersion", "config"],
+  "properties": {
+    "templateId": { "enum": ["memory-game", "love-journey"] },
+    "templateVersion": { "enum": ["1.0.0", "1.1.0"] },
+    "configVersion": { "const": 1 },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openingTitle", "rounds"],
+      "properties": {
+        "openingTitle": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "loveLetter": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "letterPassword": { "type": "string", "pattern": "^[0-9]{4}$" },
+        "passwordHint": { "type": "string", "maxLength": 100 },
+        "rounds": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "type": "object" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "templateId": { "const": "memory-game" } },
+        "required": ["templateId"]
+      },
+      "then": {
+        "properties": { "templateVersion": { "const": "1.0.0" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "templateId": { "const": "love-journey" },
+          "templateVersion": { "const": "1.1.0" }
+        },
+        "required": ["templateId", "templateVersion"]
+      },
+      "then": {
+        "properties": {
+          "config": {
+            "required": ["openingTitle", "rounds", "loveLetter", "letterPassword"]
+          }
+        }
+      }
+    }
+  ]
+}

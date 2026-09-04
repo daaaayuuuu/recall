@@ -1,0 +1,2789 @@
+openapi: 3.1.0
+info:
+  title: RECALL API
+  version: 0.1.0
+  description: 个性化游戏生成与分享平台 MVP API。
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      summary: 检查进程是否存活
+      tags: [Health]
+      responses:
+        "200":
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /health/ready:
+    get:
+      operationId: getReadiness
+      summary: 检查 MySQL 和 MinIO 是否就绪
+      tags: [Health]
+      responses:
+        "200":
+          description: 所有必要依赖均已就绪
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: 至少一个必要依赖不可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/auth/register:
+    post:
+      operationId: registerCreator
+      summary: 使用用户 ID 注册制作方账号
+      tags: [Creator Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/auth/login:
+    post:
+      operationId: loginCreator
+      summary: 登录制作方账号
+      tags: [Creator Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatorLoginRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/CreatorSession"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/auth/session:
+    get:
+      operationId: getCreatorSession
+      summary: 获取当前制作方会话
+      tags: [Creator Auth]
+      responses:
+        "200":
+          $ref: "#/components/responses/CreatorSession"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/auth/csrf:
+    post:
+      operationId: createCreatorCSRF
+      summary: 生成当前制作方会话的 CSRF 凭据
+      tags: [Creator Auth]
+      responses:
+        "200":
+          description: CSRF 凭据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSRFResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutCreator
+      summary: 撤销当前制作方会话
+      tags: [Creator Auth]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          $ref: "#/components/responses/Message"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+  /api/v1/me:
+    get:
+      operationId: getCreatorProfile
+      summary: 获取当前制作方资料
+      tags: [Creator Profile]
+      responses:
+        "200":
+          description: 制作方资料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfileResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+    patch:
+      operationId: updateCreatorProfile
+      summary: 修改当前制作方昵称
+      tags: [Creator Profile]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nickname]
+              properties:
+                nickname:
+                  type: string
+                  maxLength: 64
+      responses:
+        "200":
+          description: 更新后的资料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfileResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+  /api/v1/me/avatar:
+    get:
+      operationId: getCreatorAvatar
+      summary: 获取当前制作方头像
+      tags: [Creator Profile]
+      responses:
+        "307":
+          description: 重定向到短期有效的私有头像地址
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "401":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: uploadCreatorAvatar
+      summary: 上传或更换当前制作方头像
+      tags: [Creator Profile]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG、PNG 或 WebP 图片
+      responses:
+        "201":
+          description: 头像上传成功后的资料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfileResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "415":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+    delete:
+      operationId: deleteCreatorAvatar
+      summary: 删除当前制作方头像
+      tags: [Creator Profile]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: 删除头像后的资料；未设置头像时同样成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorProfileResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+  /api/v1/me/password:
+    put:
+      operationId: changeCreatorPassword
+      summary: 修改密码并撤销全部会话
+      tags: [Creator Profile]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Message"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/auth/login:
+    post:
+      operationId: loginAdministrator
+      summary: 管理员登录
+      tags: [Admin Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AdminSession"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "503":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/auth/session:
+    get:
+      operationId: getAdministratorSession
+      summary: 获取当前管理员会话
+      tags: [Admin Auth]
+      responses:
+        "200":
+          $ref: "#/components/responses/AdminSession"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/auth/csrf:
+    post:
+      operationId: createAdministratorCSRF
+      summary: 生成当前管理员会话的 CSRF 凭据
+      tags: [Admin Auth]
+      responses:
+        "200":
+          description: CSRF 凭据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSRFResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/auth/logout:
+    post:
+      operationId: logoutAdministrator
+      summary: 管理员退出
+      tags: [Admin Auth]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          $ref: "#/components/responses/Message"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/invitation-codes:
+    get:
+      operationId: listRegistrationInvitations
+      summary: 查询最近生成的邀请码及其使用状态
+      description: 列表只返回脱敏邀请码，不返回完整邀请码或哈希。
+      tags: [Admin Invitations]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: 脱敏邀请码列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminInvitationListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: createRegistrationInvitation
+      summary: 生成一个只能成功注册一次的邀请码
+      description: 完整邀请码仅在本次创建响应中返回一次，格式为 XXXX-XXXX。
+      tags: [Admin Invitations]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "201":
+          description: 新邀请码；这是唯一包含完整邀请码的响应
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedAdminInvitationResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/invitation-codes/{invitationId}:
+    parameters:
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+    delete:
+      operationId: revokeRegistrationInvitation
+      summary: 撤销一个尚未使用的邀请码
+      tags: [Admin Invitations]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "200":
+          description: 更新后的脱敏邀请码
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminInvitationResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/ai-settings:
+    get:
+      operationId: getAdminAISettings
+      summary: 获取当前生效的 AI 配置
+      description: API Key 永不回显；只返回是否配置、来源和脱敏末四位。
+      tags: [Admin AI Settings]
+      responses:
+        "200":
+          description: 当前 AI 配置及版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAISettingsResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+    put:
+      operationId: publishAdminAISettings
+      summary: 校验并发布一个新的 AI 配置版本
+      tags: [Admin AI Settings]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminAISettingsRequest"
+      responses:
+        "200":
+          description: 新发布的 AI 配置版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAISettingsResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/ai-settings/test:
+    post:
+      operationId: testAdminAIConnection
+      summary: 使用尚未保存的表单配置测试指定 AI 能力
+      tags: [Admin AI Settings]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestAdminAIConnectionRequest"
+      responses:
+        "200":
+          description: 服务真实请求测试成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestAdminAIConnectionResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "400":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+        "502":
+          $ref: "#/components/responses/APIError"
+  /api/v1/analytics/events:
+    post:
+      operationId: recordCreatorBehaviorEvent
+      summary: 上报当前制作方的白名单前端行为事件
+      description: 仅 app/all Surface 挂载；第一版只接受 creator.page_viewed，制作方和用户会话关联均由服务端认证上下文推导。
+      tags: [Analytics]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatorAnalyticsEventRequest"
+      responses:
+        "200":
+          description: 合法幂等重试，返回原事件
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEventWriteResponse"
+        "201":
+          description: 新事件已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEventWriteResponse"
+        "400":
+          $ref: "#/components/responses/APIError"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/behavior-events:
+    get:
+      operationId: listAdminBehaviorEvents
+      summary: 查询脱敏的用户行为事件
+      description: 仅 app/all Surface 挂载，按 createdAt 和 id 倒序进行不透明游标分页。
+      tags: [Analytics]
+      parameters:
+        - name: eventName
+          in: query
+          schema:
+            $ref: "#/components/schemas/BehaviorEventName"
+        - name: creatorId
+          in: query
+          schema:
+            $ref: "#/components/schemas/ULID"
+        - name: loginId
+          in: query
+          description: 仅通过 users.login_id 参数化精确联查，不搜索事件属性。
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 32
+        - name: gameId
+          in: query
+          schema:
+            $ref: "#/components/schemas/ULID"
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [frontend, api, worker]
+        - name: from
+          in: query
+          description: createdAt 的包含性下界。
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: createdAt 的排除性上界。
+          schema:
+            type: string
+            format: date-time
+        - name: cursor
+          in: query
+          description: 服务端返回的无填充 Base64URL v1 游标。
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: 行为事件列表；空结果返回 items 为空数组、nextCursor 为 null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBehaviorEventListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/ai/love-letter/polish:
+    post:
+      operationId: polishLoveLetter
+      summary: 润色情书；未配置文本模型时保留原文
+      description: Key 为空时不调用外部模型，返回裁剪后的原文并将 skipped 设为 true。配置模型后，超时或供应商异常仍返回错误。
+      tags: [AI Assistance]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoveLetterPolishRequest"
+      responses:
+        "200":
+          description: 润色结果或无 Key 降级后的原文
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoveLetterPolishResponse"
+        "400":
+          $ref: "#/components/responses/APIError"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+        "502":
+          $ref: "#/components/responses/APIError"
+        "504":
+          $ref: "#/components/responses/APIError"
+  /api/v1/templates:
+    get:
+      operationId: listGameTemplates
+      summary: 获取当前制作方可用的游戏模板和上传限制
+      tags: [Game Templates]
+      responses:
+        "200":
+          description: 模板定义及当前图生图配置允许的单张源图上限
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameTemplateListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games:
+    get:
+      operationId: listGames
+      summary: 获取当前制作方的游戏列表
+      tags: [Games]
+      responses:
+        "200":
+          description: 游戏列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: createGame
+      summary: 创建游戏草稿和初始版本
+      tags: [Games]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameRequest"
+      responses:
+        "201":
+          description: 游戏草稿及初始版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateGameResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+    get:
+      operationId: getGame
+      summary: 获取游戏详情
+      tags: [Games]
+      responses:
+        "200":
+          description: 游戏详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+    patch:
+      operationId: updateGame
+      summary: 修改游戏名称和描述
+      tags: [Games]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGameRequest"
+      responses:
+        "200":
+          description: 更新后的游戏
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResponse"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+    delete:
+      operationId: deleteGame
+      summary: 将游戏移出列表并提交异步永久删除任务
+      tags: [Games]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "202":
+          description: 删除任务已入队
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameDeletionResponse"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+    get:
+      operationId: listGameVersions
+      summary: 获取游戏版本历史
+      tags: [Game Versions]
+      responses:
+        "200":
+          description: 版本列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameVersionListResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: createGameVersion
+      summary: 从新的用户输入文本创建草稿版本
+      tags: [Game Versions]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGameVersionRequest"
+      responses:
+        "201":
+          description: 新草稿版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameVersionResponse"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions/{versionId}:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/VersionID"
+    get:
+      operationId: getGameVersion
+      summary: 获取单个游戏版本
+      tags: [Game Versions]
+      responses:
+        "200":
+          description: 游戏版本
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameVersionResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions/{versionId}/preview:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/VersionID"
+    get:
+      operationId: previewGameVersion
+      summary: 制作方私密试玩已完成的游戏版本
+      description: 仅游戏所有者可访问，不创建分享链接或公开游玩会话；渲染资源地址有效期为 15 分钟。
+      tags: [Game Versions]
+      responses:
+        "200":
+          description: 已校验的游戏配置和私密试玩资源
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatorPreviewResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions/{versionId}/assets:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/VersionID"
+    get:
+      operationId: listGameAssets
+      summary: 获取版本的图片素材
+      tags: [Game Assets]
+      responses:
+        "200":
+          description: 图片素材列表；预览地址有效期为 15 分钟
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAssetListResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: uploadGameAsset
+      summary: 向草稿版本流式上传一张图片
+      description: 接受 JPEG、PNG 或 WebP。服务端解码、去除元数据并重新编码为 PNG。配置审核 Key 时会调用视觉 LLM，只有通过后才写入；审核拒绝返回 IMAGE_MODERATION_REJECTED，已配置的审核服务异常返回 503。未配置 Key 时明确跳过审核并继续上传。
+      tags: [Game Assets]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                role:
+                  type: string
+                  enum: [source, cover]
+                  default: source
+                slotKey:
+                  type: string
+                  maxLength: 128
+                sortOrder:
+                  type: integer
+                  minimum: 0
+                  default: 0
+      responses:
+        "201":
+          description: 已保存的图片素材
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAssetResponse"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "415":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+        "429":
+          $ref: "#/components/responses/APIError"
+        "503":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions/{versionId}/assets/order:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/VersionID"
+    patch:
+      operationId: reorderGameAssets
+      summary: 调整草稿版本中可排序素材槽的图片顺序
+      tags: [Game Assets]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderGameAssetsRequest"
+      responses:
+        "204":
+          description: 素材顺序已更新
+        "400":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/versions/{versionId}/assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/VersionID"
+      - $ref: "#/components/parameters/AssetID"
+    delete:
+      operationId: deleteGameAsset
+      summary: 从草稿版本中删除图片素材
+      tags: [Game Assets]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "204":
+          description: 素材已删除
+        "403":
+          $ref: "#/components/responses/APIError"
+        "404":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/generation-runs:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+    get:
+      operationId: listGenerationRuns
+      summary: 获取游戏的创建任务历史
+      tags: [Generation Runs]
+      responses:
+        "200":
+          description: 创建任务列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationRunListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: submitGenerationRun
+      summary: 将当前游戏版本提交到 MySQL 任务队列
+      tags: [Generation Runs]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitGenerationRequest"
+      responses:
+        "200":
+          description: 相同幂等请求对应的已有任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationRunResponse"
+        "201":
+          description: 新创建的排队任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationRunResponse"
+        "400":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/generation-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/RunID"
+    get:
+      operationId: getGenerationRun
+      summary: 获取创建任务当前阶段和进度
+      tags: [Generation Runs]
+      responses:
+        "200":
+          description: 创建任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationRunResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/generation-runs/{runId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/RunID"
+    post:
+      operationId: cancelGenerationRun
+      summary: 取消排队任务或请求 Worker 安全停止运行中任务
+      tags: [Generation Runs]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "200":
+          description: 更新后的任务状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationRunResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/generation-runs:
+    get:
+      operationId: listAdminGenerationRuns
+      summary: 获取不包含私人输入和素材的创建任务诊断列表
+      tags: [Admin Generation Runs]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/GenerationRunStatus"
+      responses:
+        "200":
+          description: 管理员创建任务列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminGenerationRunListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/admin/generation-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+    get:
+      operationId: getAdminGenerationRun
+      summary: 获取单条脱敏创建任务诊断
+      tags: [Admin Generation Runs]
+      responses:
+        "200":
+          description: 管理员创建任务详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminGenerationRunResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/share-links:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+    get:
+      operationId: listShareLinks
+      summary: 获取游戏的分享历史及可再次复制的链接
+      tags: [Share Links]
+      responses:
+        "200":
+          description: 分享链接列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkListResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+    post:
+      operationId: createShareLink
+      summary: 为创建完成的当前版本创建分享链接
+      tags: [Share Links]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShareLinkRequest"
+      responses:
+        "201":
+          description: 新分享链接；Secret 只出现在 URL Fragment 中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkResponse"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+  /api/v1/games/{gameId}/share-links/{shareId}:
+    parameters:
+      - $ref: "#/components/parameters/GameID"
+      - $ref: "#/components/parameters/ShareID"
+    get:
+      operationId: getShareLink
+      summary: 获取单个制作方分享链接
+      tags: [Share Links]
+      responses:
+        "200":
+          description: 分享链接
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+    delete:
+      operationId: revokeShareLink
+      summary: 主动停止分享并立即使相关游玩会话失效
+      tags: [Share Links]
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "200":
+          description: 已停止的分享链接
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkResponse"
+        "404":
+          $ref: "#/components/responses/APIError"
+  /api/v1/public/shares/{publicId}/resolve:
+    parameters:
+      - $ref: "#/components/parameters/PublicID"
+    post:
+      operationId: resolvePublicShare
+      summary: 使用 Fragment 中的 Secret 解析公开分享开场信息
+      tags: [Public Play]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        $ref: "#/components/requestBodies/ShareSecret"
+      responses:
+        "200":
+          description: 不包含账号、原始素材和创建输入的分享信息
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicShareResponse"
+        "410":
+          $ref: "#/components/responses/APIError"
+  /api/v1/public/shares/{publicId}/play-sessions:
+    parameters:
+      - $ref: "#/components/parameters/PublicID"
+    post:
+      operationId: createPublicPlaySession
+      summary: 在有效分享上开始最长 30 分钟的一局游戏
+      tags: [Public Play]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        $ref: "#/components/requestBodies/ShareSecret"
+      responses:
+        "201":
+          description: 游玩会话；不透明凭据写入独立 HttpOnly Cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaySessionResponse"
+        "410":
+          $ref: "#/components/responses/APIError"
+  /api/v1/public/play-sessions/current/game-config:
+    get:
+      operationId: getPublicGameConfig
+      summary: 使用游玩会话读取经过 Schema 校验的固定模板配置
+      tags: [Public Play]
+      responses:
+        "200":
+          description: 固定模板配置和允许公开的短期资源地址
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameConfigResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/public/play-sessions/current/refresh-assets:
+    post:
+      operationId: refreshPublicAssets
+      summary: 为当前游玩会话刷新允许公开的短期资源地址
+      tags: [Public Play]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+      responses:
+        "200":
+          description: 更新后的公开资源地址
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicAssetListResponse"
+        "401":
+          $ref: "#/components/responses/APIError"
+  /api/v1/public/play-sessions/current/events:
+    post:
+      operationId: recordPublicPlayBehaviorEvent
+      summary: 上报当前有效公开游玩会话的白名单前端事件
+      description: 仅 play/all Surface 挂载；第一版只接受 play.completed 和 play.replayed，所有业务关联均由 HttpOnly 游玩会话推导。
+      tags: [Analytics, Public Play]
+      parameters:
+        - $ref: "#/components/parameters/Origin"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicPlayAnalyticsEventRequest"
+      responses:
+        "200":
+          description: 合法幂等重试，返回原事件
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEventWriteResponse"
+        "201":
+          description: 新事件已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsEventWriteResponse"
+        "400":
+          $ref: "#/components/responses/APIError"
+        "401":
+          $ref: "#/components/responses/APIError"
+        "403":
+          $ref: "#/components/responses/APIError"
+        "409":
+          $ref: "#/components/responses/APIError"
+        "429":
+          $ref: "#/components/responses/APIError"
+        "422":
+          $ref: "#/components/responses/APIError"
+components:
+  parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uri
+      example: http://127.0.0.1:5173
+    GameID:
+      name: gameId
+      in: path
+      required: true
+      schema:
+        type: string
+    VersionID:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+    AssetID:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+    RunID:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 由客户端为一次用户提交生成并在网络重试时复用，最长 128 字符。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    ShareID:
+      name: shareId
+      in: path
+      required: true
+      schema:
+        type: string
+    PublicID:
+      name: publicId
+      in: path
+      required: true
+      description: 公开查询标识，不单独构成授权凭据。
+      schema:
+        type: string
+  requestBodies:
+    ShareSecret:
+      required: true
+      description: Secret 必须来自 URL Fragment，不得放入 Query String。
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [secret]
+            properties:
+              secret:
+                type: string
+  responses:
+    APIError:
+      description: 请求失败
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Message:
+      description: 操作成功
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MessageResponse"
+    CreatorSession:
+      description: 制作方会话
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CreatorSessionResponse"
+    AdminSession:
+      description: 管理员会话
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AdminSessionResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        service:
+          type: string
+        dependencies:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ok, unavailable]
+    RegisterRequest:
+      type: object
+      required: [invitationCode, userId, password, nickname]
+      properties:
+        invitationCode:
+          type: string
+          pattern: "^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$"
+          description: 管理员生成且尚未使用的一次性邀请码；服务端不区分大小写。
+        userId:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[A-Za-z][A-Za-z0-9_-]{2,31}$"
+          description: 接收大小写字母，服务端规范化为小写后保存。
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+        nickname:
+          type: string
+          maxLength: 64
+    CreatorLoginRequest:
+      type: object
+      required: [userId, password]
+      properties:
+        userId:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[A-Za-z][A-Za-z0-9_-]{2,31}$"
+          description: 登录时不区分大小写。
+        password:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 128
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    AdminInvitation:
+      type: object
+      required: [id, codeHint, status, createdByAdmin, usedByCreatorId, usedByLoginId, usedAt, revokedAt, createdAt]
+      properties:
+        id:
+          type: string
+        codeHint:
+          type: string
+          pattern: "^••••-[2-9A-HJ-NP-Z]{4}$"
+          description: 只保留末四位的脱敏标识。
+        status:
+          type: string
+          enum: [unused, used, revoked]
+        createdByAdmin:
+          type: string
+        usedByCreatorId:
+          type: [string, "null"]
+        usedByLoginId:
+          type: [string, "null"]
+        usedAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreatedAdminInvitation:
+      allOf:
+        - $ref: "#/components/schemas/AdminInvitation"
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              pattern: "^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$"
+              description: 仅在创建成功时返回一次的完整邀请码。
+    AdminInvitationResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/AdminInvitation"
+        requestId:
+          type: string
+    CreatedAdminInvitationResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/CreatedAdminInvitation"
+        requestId:
+          type: string
+    AdminInvitationListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminInvitation"
+        requestId:
+          type: string
+    TextAISettings:
+      type: object
+      additionalProperties: false
+      required: [enabled, provider, baseUrl, model, timeout, maxOutputTokens]
+      properties:
+        enabled:
+          type: boolean
+        provider:
+          type: string
+        baseUrl:
+          type: string
+          description: 能力启用时必须是有效服务地址；禁用时允许为空字符串。
+        model:
+          type: string
+          maxLength: 256
+        timeout:
+          type: string
+          examples: [30s]
+        maxOutputTokens:
+          type: integer
+          minimum: 1
+          maximum: 100000
+    ImageModerationAISettings:
+      allOf:
+        - $ref: "#/components/schemas/TextAISettings"
+    ImageToImageAISettings:
+      type: object
+      additionalProperties: false
+      required: [enabled, provider, baseUrl, model, quality, timeout, maxInputBytes, maxOutputBytes]
+      properties:
+        enabled:
+          type: boolean
+        provider:
+          type: string
+        baseUrl:
+          type: string
+          description: 能力启用时必须是有效服务地址；禁用时允许为空字符串。
+        model:
+          type: string
+          maxLength: 256
+        quality:
+          type: string
+          enum: [auto, low, medium, high]
+        timeout:
+          type: string
+          examples: [3m]
+        maxInputBytes:
+          type: integer
+          minimum: 1
+          maximum: 104857600
+        maxOutputBytes:
+          type: integer
+          minimum: 1
+          maximum: 104857600
+    AISettingsSnapshot:
+      type: object
+      additionalProperties: false
+      required: [text, imageModeration, imageToImage]
+      properties:
+        text:
+          $ref: "#/components/schemas/TextAISettings"
+        imageModeration:
+          $ref: "#/components/schemas/ImageModerationAISettings"
+        imageToImage:
+          $ref: "#/components/schemas/ImageToImageAISettings"
+    APIKeyStatus:
+      type: object
+      additionalProperties: false
+      required: [configured, source]
+      properties:
+        configured:
+          type: boolean
+        hint:
+          type: string
+          description: 可选的脱敏末四位；永不包含完整 API Key。
+        source:
+          type: string
+          enum: [environment, admin]
+    APIKeyMutation:
+      type: object
+      additionalProperties: false
+      required: [value, clear]
+      properties:
+        value:
+          type: string
+          maxLength: 4096
+          writeOnly: true
+          description: 留空表示保持现有值；该字段不会出现在任何响应中。
+        clear:
+          type: boolean
+    APIKeyMutations:
+      type: object
+      additionalProperties: false
+      required: [text, imageModeration, imageToImage]
+      properties:
+        text:
+          $ref: "#/components/schemas/APIKeyMutation"
+        imageModeration:
+          $ref: "#/components/schemas/APIKeyMutation"
+        imageToImage:
+          $ref: "#/components/schemas/APIKeyMutation"
+    AdminAISettings:
+      type: object
+      additionalProperties: false
+      required: [dynamicEnabled, version, source, settings, apiKeys]
+      properties:
+        dynamicEnabled:
+          type: boolean
+        version:
+          type: integer
+          minimum: 0
+        source:
+          type: string
+          enum: [environment, admin]
+        settings:
+          $ref: "#/components/schemas/AISettingsSnapshot"
+        apiKeys:
+          type: object
+          additionalProperties: false
+          required: [text, imageModeration, imageToImage]
+          properties:
+            text:
+              $ref: "#/components/schemas/APIKeyStatus"
+            imageModeration:
+              $ref: "#/components/schemas/APIKeyStatus"
+            imageToImage:
+              $ref: "#/components/schemas/APIKeyStatus"
+        updatedBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    AdminAISettingsResponse:
+      type: object
+      additionalProperties: false
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/AdminAISettings"
+        requestId:
+          type: string
+    UpdateAdminAISettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, settings, apiKeys]
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 0
+        settings:
+          $ref: "#/components/schemas/AISettingsSnapshot"
+        apiKeys:
+          $ref: "#/components/schemas/APIKeyMutations"
+    TestAdminAIConnectionRequest:
+      type: object
+      additionalProperties: false
+      required: [capability, settings, apiKeys]
+      properties:
+        capability:
+          type: string
+          enum: [text, image_moderation, image_to_image]
+        settings:
+          $ref: "#/components/schemas/AISettingsSnapshot"
+        apiKeys:
+          $ref: "#/components/schemas/APIKeyMutations"
+    TestAdminAIConnectionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [capability, latencyMs]
+          properties:
+            capability:
+              type: string
+              enum: [text, image_moderation, image_to_image]
+            latencyMs:
+              type: integer
+              minimum: 0
+        requestId:
+          type: string
+    LoveLetterPolishRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    LoveLetterPolishResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [polishedText, skipped]
+          properties:
+            polishedText:
+              type: string
+            skipped:
+              type: boolean
+              description: 未配置文本模型 Key、未调用外部模型时为 true
+        requestId:
+          type: string
+    TemplateTextInput:
+      type: object
+      additionalProperties: false
+      required: [key, label, required, maxLength]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        placeholder:
+          type: string
+        helpText:
+          type: string
+        inputType:
+          type: string
+          enum: [text, textarea, password]
+        required:
+          type: boolean
+        minLength:
+          type: integer
+          minimum: 0
+        maxLength:
+          type: integer
+          minimum: 0
+        format:
+          type: string
+          enum: [four-digit-code]
+    TemplateAssetSlot:
+      type: object
+      additionalProperties: false
+      required: [key, label, required, minItems, maxItems, sortable]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        helpText:
+          type: string
+        required:
+          type: boolean
+        minItems:
+          type: integer
+          minimum: 0
+        maxItems:
+          type: integer
+          minimum: 0
+        sortable:
+          type: boolean
+    TemplateScene:
+      type: object
+      additionalProperties: false
+      required: [key, name, summary, textInputs, assetSlots]
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        summary:
+          type: string
+        textInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateTextInput"
+        assetSlots:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateAssetSlot"
+    GameTemplate:
+      type: object
+      additionalProperties: false
+      required: [id, version, name, description, inputSchemaVersion, generationEnabled, cover, scenes]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        inputSchemaVersion:
+          type: integer
+          minimum: 1
+        generationEnabled:
+          type: boolean
+        cover:
+          $ref: "#/components/schemas/TemplateAssetSlot"
+        scenes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateScene"
+    GameTemplateListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [items, maxSourceImageBytes]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GameTemplate"
+            maxSourceImageBytes:
+              type: integer
+              minimum: 1
+        requestId:
+          type: string
+    CreateGameRequest:
+      type: object
+      required: [title, description, templateId, templateVersion, sceneInputs]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 500
+        templateId:
+          type: string
+          minLength: 1
+          maxLength: 64
+        templateVersion:
+          type: string
+          minLength: 1
+          maxLength: 32
+        sceneInputs:
+          $ref: "#/components/schemas/SceneInputs"
+    UpdateGameRequest:
+      type: object
+      required: [title, description]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 500
+    CreateGameVersionRequest:
+      type: object
+      required: [sceneInputs]
+      properties:
+        sceneInputs:
+          $ref: "#/components/schemas/SceneInputs"
+    SceneInputs:
+      type: object
+      description: 文本键和值由所选模板版本定义；服务端拒绝未知键并执行必填、长度和格式校验。
+      additionalProperties:
+        type: string
+    ReorderGameAssetsRequest:
+      type: object
+      additionalProperties: false
+      required: [slotKey, assetIds]
+      properties:
+        slotKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+        assetIds:
+          type: array
+          items:
+            type: string
+    SubmitGenerationRequest:
+      type: object
+      required: [versionId]
+      properties:
+        versionId:
+          type: string
+    GenerationRunStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    GenerationRunStage:
+      type: string
+      enum: [queued, transforming_images, saving_results, completed]
+    GenerationRun:
+      type: object
+      required: [id, gameId, gameVersionId, attemptNumber, triggerType, status, stage, progress, errorCode, errorMessage, retryable, cancelRequested, createdAt, updatedAt, startedAt, completedAt]
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        gameVersionId:
+          type: string
+        attemptNumber:
+          type: integer
+          minimum: 1
+        triggerType:
+          type: string
+          enum: [initial, user_retry]
+        status:
+          $ref: "#/components/schemas/GenerationRunStatus"
+        stage:
+          $ref: "#/components/schemas/GenerationRunStage"
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 兼容字段；处理中为 0，最终状态为 100，不代表真实模型完成百分比。当前前端按 stage 映射为固定的展示百分比和四步文案。
+        errorCode:
+          type: [string, "null"]
+        errorMessage:
+          type: [string, "null"]
+        retryable:
+          type: boolean
+        cancelRequested:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: [string, "null"]
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+    AdminGenerationRun:
+      allOf:
+        - $ref: "#/components/schemas/GenerationRun"
+        - type: object
+          required: [executionCount, traceId, adminMessage, sanitizedDetails]
+          properties:
+            executionCount:
+              type: integer
+              minimum: 0
+            traceId:
+              type: string
+            adminMessage:
+              type: [string, "null"]
+            sanitizedDetails:
+              type: [object, "null"]
+              additionalProperties: true
+              description: 仅允许错误类型、诊断码、生成器版本等白名单字段。
+    GenerationRunResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/GenerationRun"
+        requestId:
+          type: string
+    GenerationRunListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GenerationRun"
+        requestId:
+          type: string
+    AdminGenerationRunResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/AdminGenerationRun"
+        requestId:
+          type: string
+    AdminGenerationRunListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminGenerationRun"
+        requestId:
+          type: string
+    CreateShareLinkRequest:
+      type: object
+      required: [expiresAt]
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: 必须晚于当前时间，且不能超过创建时间后 90 天。
+    ShareLink:
+      type: object
+      required: [id, gameId, gameVersionId, publicId, url, status, expiresAt, revokedAt, createdAt]
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        gameVersionId:
+          type: string
+        publicId:
+          type: string
+        url:
+          type: string
+          description: Secret 只存在于 URL Fragment；仅返回给游戏所有者。
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ShareLinkResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/ShareLink"
+        requestId:
+          type: string
+    ShareLinkListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ShareLink"
+        requestId:
+          type: string
+    PublicShareResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [creator, share, game]
+          properties:
+            creator:
+              type: object
+              required: [displayName]
+              properties:
+                displayName:
+                  type: string
+            share:
+              type: object
+              required: [expiresAt]
+              properties:
+                expiresAt:
+                  type: string
+                  format: date-time
+            game:
+              type: object
+              required: [title, ready]
+              properties:
+                title:
+                  type: string
+                ready:
+                  type: boolean
+        requestId:
+          type: string
+    PlaySessionResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [expiresAt, game]
+          properties:
+            expiresAt:
+              type: string
+              format: date-time
+            game:
+              type: object
+              required: [title, templateId, templateVersion]
+              properties:
+                title:
+                  type: string
+                templateId:
+                  type: string
+                  enum: [memory-game, love-journey]
+                templateVersion:
+                  type: string
+                  enum: [1.0.0, 1.1.0]
+        requestId:
+          type: string
+    PublicAsset:
+      type: object
+      required: [key, type, url, mimeType, expiresAt]
+      properties:
+        key:
+          type: string
+        type:
+          type: string
+          enum: [image]
+        url:
+          type: string
+          format: uri
+        mimeType:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    GameConfigResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [templateId, templateVersion, configVersion, config, assets, playSessionExpiresAt]
+          properties:
+            templateId:
+              type: string
+              enum: [memory-game, love-journey]
+            templateVersion:
+              type: string
+              enum: [1.0.0, 1.1.0]
+            configVersion:
+              type: integer
+              enum: [1]
+            config:
+              type: object
+              additionalProperties: false
+              required: [openingTitle, rounds]
+              properties:
+                openingTitle:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                rounds:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                loveLetter:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  description: love-journey@1.1.0 必填。
+                letterPassword:
+                  type: string
+                  pattern: "^[0-9]{4}$"
+                  description: love-journey@1.1.0 必填的四位数字拆信密码。
+                passwordHint:
+                  type: string
+                  maxLength: 100
+            assets:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicAsset"
+            playSessionExpiresAt:
+              type: string
+              format: date-time
+        requestId:
+          type: string
+    CreatorPreviewResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [game, version, templateId, templateVersion, configVersion, config, assets]
+          properties:
+            game:
+              type: object
+              required: [id, title]
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+            version:
+              type: object
+              required: [id, versionNumber]
+              properties:
+                id:
+                  type: string
+                versionNumber:
+                  type: integer
+                  minimum: 1
+            templateId:
+              type: string
+              enum: [memory-game, love-journey]
+            templateVersion:
+              type: string
+              enum: [1.0.0, 1.1.0]
+            configVersion:
+              type: integer
+              enum: [1]
+            config:
+              type: object
+              additionalProperties: false
+              required: [openingTitle, rounds]
+              properties:
+                openingTitle:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                rounds:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                loveLetter:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  description: love-journey@1.1.0 必填。
+                letterPassword:
+                  type: string
+                  pattern: "^[0-9]{4}$"
+                  description: love-journey@1.1.0 必填的四位数字拆信密码。
+                passwordHint:
+                  type: string
+                  maxLength: 100
+            assets:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicAsset"
+        requestId:
+          type: string
+    PublicAssetListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [assets]
+          properties:
+            assets:
+              type: array
+              items:
+                $ref: "#/components/schemas/PublicAsset"
+        requestId:
+          type: string
+    Game:
+      type: object
+      required: [id, title, description, coverAssetId, coverPreviewUrl, status, currentVersionId, assetCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+        coverAssetId:
+          type: [string, "null"]
+        coverPreviewUrl:
+          type: [string, "null"]
+          format: uri
+        status:
+          type: string
+          enum: [draft, queued, generating, ready, failed]
+        currentVersionId:
+          type: [string, "null"]
+        assetCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GameVersion:
+      type: object
+      required: [id, gameId, versionNumber, status, memoryText, inputSchemaVersion, sceneInputs, templateId, templateVersion, assetCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        versionNumber:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [draft, queued, generating, ready, failed]
+        memoryText:
+          type: string
+          description: 旧版本兼容字段；当前模板使用 sceneInputs。
+        inputSchemaVersion:
+          type: integer
+          minimum: 1
+        sceneInputs:
+          $ref: "#/components/schemas/SceneInputs"
+        templateId:
+          type: string
+        templateVersion:
+          type: string
+        assetCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GameAsset:
+      type: object
+      required: [id, role, slotKey, mimeType, sizeBytes, width, height, sortOrder, previewUrl, createdAt]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [source, cover]
+        slotKey:
+          type: string
+        mimeType:
+          type: string
+          enum: [image/png]
+        sizeBytes:
+          type: integer
+          minimum: 1
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        sortOrder:
+          type: integer
+          minimum: 0
+        previewUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+    GameResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/Game"
+        requestId:
+          type: string
+    GameListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Game"
+        requestId:
+          type: string
+    CreateGameResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [game, version]
+          properties:
+            game:
+              $ref: "#/components/schemas/Game"
+            version:
+              $ref: "#/components/schemas/GameVersion"
+        requestId:
+          type: string
+    GameVersionResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/GameVersion"
+        requestId:
+          type: string
+    GameVersionListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GameVersion"
+        requestId:
+          type: string
+    GameAssetResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/GameAsset"
+        requestId:
+          type: string
+    GameAssetListResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GameAsset"
+        requestId:
+          type: string
+    GameDeletionResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [deletionJobId, message]
+          properties:
+            deletionJobId:
+              type: string
+            message:
+              type: string
+        requestId:
+          type: string
+    Creator:
+      type: object
+      required: [id, userId, nickname, avatarAssetId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: "^[a-z][a-z0-9_-]{2,31}$"
+          description: 已规范化为小写的全局唯一登录标识。
+        nickname:
+          type: [string, "null"]
+        avatarAssetId:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreatorSessionResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [user]
+          properties:
+            user:
+              $ref: "#/components/schemas/Creator"
+        requestId:
+          type: string
+    RegisterResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [user, message]
+          properties:
+            user:
+              $ref: "#/components/schemas/Creator"
+            message:
+              type: string
+        requestId:
+          type: string
+    CreatorProfileResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          $ref: "#/components/schemas/Creator"
+        requestId:
+          type: string
+    AdminSessionResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [admin]
+          properties:
+            admin:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+        requestId:
+          type: string
+    CSRFResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          required: [csrfToken]
+          properties:
+            csrfToken:
+              type: string
+        requestId:
+          type: string
+    MessageResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        requestId:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error, requestId]
+      properties:
+        error:
+          type: object
+          required: [code, message, fields]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            fields:
+              type: object
+              additionalProperties:
+                type: string
+        requestId:
+          type: string
+    ULID:
+      type: string
+      pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+      minLength: 26
+      maxLength: 26
+    BehaviorEventName:
+      type: string
+      enum:
+        - creator.page_viewed
+        - creator.registered
+        - creator.logged_in
+        - game.created
+        - game.version_created
+        - asset.uploaded
+        - generation.submitted
+        - generation.succeeded
+        - generation.failed
+        - share.created
+        - share.opened
+        - play.started
+        - play.completed
+        - play.replayed
+    CreatorAnalyticsEventRequest:
+      type: object
+      additionalProperties: false
+      required: [eventName, clientEventId, properties]
+      properties:
+        eventName:
+          type: string
+          const: creator.page_viewed
+        clientEventId:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        occurredAt:
+          type: string
+          format: date-time
+        properties:
+          $ref: "#/components/schemas/CreatorPageViewedProperties"
+    PublicPlayAnalyticsEventRequest:
+      type: object
+      additionalProperties: false
+      required: [eventName, clientEventId, properties]
+      properties:
+        eventName:
+          type: string
+          enum: [play.completed, play.replayed]
+        clientEventId:
+          type: string
+          format: uuid
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        occurredAt:
+          type: string
+          format: date-time
+        properties:
+          $ref: "#/components/schemas/PublicPlayProperties"
+    CreatorPageViewedProperties:
+      type: object
+      additionalProperties: false
+      required: [page]
+      properties:
+        page:
+          type: string
+          enum: [create, games, game-edit, game-preview, game-share, generation-progress, settings]
+    PublicPlayProperties:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          const: public
+    AnalyticsEventWriteResponse:
+      type: object
+      additionalProperties: false
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [eventId, duplicate]
+          properties:
+            eventId:
+              $ref: "#/components/schemas/ULID"
+            duplicate:
+              type: boolean
+        requestId:
+          $ref: "#/components/schemas/ULID"
+    AdminBehaviorEventListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, requestId]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [items, nextCursor]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminBehaviorEvent"
+            nextCursor:
+              type: [string, "null"]
+              description: 无填充 Base64URL v1 游标；无更多结果时为 null。
+        requestId:
+          $ref: "#/components/schemas/ULID"
+    AdminBehaviorEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - eventName
+        - source
+        - actorType
+        - creatorId
+        - loginId
+        - userSessionId
+        - gameId
+        - gameVersionId
+        - generationRunId
+        - shareId
+        - playSessionId
+        - requestId
+        - properties
+        - occurredAt
+        - createdAt
+      properties:
+        id:
+          $ref: "#/components/schemas/ULID"
+        eventName:
+          $ref: "#/components/schemas/BehaviorEventName"
+        source:
+          type: string
+          enum: [frontend, api, worker]
+        actorType:
+          type: string
+          enum: [creator, receiver, system]
+        creatorId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        loginId:
+          type: [string, "null"]
+          description: 管理员专用顶层联查字段；事件属性中不保存登录 ID。
+        userSessionId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        gameId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        gameVersionId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        generationRunId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        shareId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        playSessionId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        requestId:
+          oneOf:
+            - $ref: "#/components/schemas/ULID"
+            - type: "null"
+        properties:
+          $ref: "#/components/schemas/BehaviorEventProperties"
+        occurredAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    BehaviorEventProperties:
+      description: 具体形状由 eventName 决定，未列出的字段一律拒绝。
+      anyOf:
+        - $ref: "#/components/schemas/EmptyAnalyticsProperties"
+        - $ref: "#/components/schemas/CreatorPageViewedProperties"
+        - $ref: "#/components/schemas/TemplateAnalyticsProperties"
+        - $ref: "#/components/schemas/VersionAnalyticsProperties"
+        - $ref: "#/components/schemas/AssetAnalyticsProperties"
+        - $ref: "#/components/schemas/GenerationSubmittedProperties"
+        - $ref: "#/components/schemas/GenerationSucceededProperties"
+        - $ref: "#/components/schemas/GenerationFailedProperties"
+        - $ref: "#/components/schemas/ShareCreatedProperties"
+        - $ref: "#/components/schemas/PublicPlayProperties"
+    EmptyAnalyticsProperties:
+      type: object
+      additionalProperties: false
+    TemplateAnalyticsProperties:
+      type: object
+      additionalProperties: false
+      required: [templateId]
+      properties:
+        templateId:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,63}$"
+    VersionAnalyticsProperties:
+      type: object
+      additionalProperties: false
+      required: [versionNumber, templateId]
+      properties:
+        versionNumber:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        templateId:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,63}$"
+    AssetAnalyticsProperties:
+      type: object
+      additionalProperties: false
+      required: [kind, mimeType, sizeBytes]
+      properties:
+        kind:
+          type: string
+          enum: [game_source, game_cover]
+        mimeType:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sizeBytes:
+          type: integer
+          minimum: 0
+          maximum: 9223372036854775807
+    GenerationSubmittedProperties:
+      type: object
+      additionalProperties: false
+      required: [attemptNumber, deduplicated]
+      properties:
+        attemptNumber:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+        deduplicated:
+          type: boolean
+    GenerationSucceededProperties:
+      type: object
+      additionalProperties: false
+      required: [executionCount]
+      properties:
+        executionCount:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+    GenerationFailedProperties:
+      type: object
+      additionalProperties: false
+      required: [errorCode, retryable, executionCount]
+      properties:
+        errorCode:
+          type: string
+          enum:
+            - INPUT_VALIDATION_FAILED
+            - ASSET_READ_FAILED
+            - GENERATION_TIMEOUT
+            - PROVIDER_RATE_LIMITED
+            - PROVIDER_UNAVAILABLE
+            - CONTENT_REJECTED
+            - ASSET_GENERATION_FAILED
+            - GAME_CONFIG_ASSEMBLY_FAILED
+            - GAME_CONFIG_INVALID
+            - TEMPLATE_COMPATIBILITY_FAILED
+            - GAME_VALIDATION_FAILED
+            - STORAGE_WRITE_FAILED
+            - STORAGE_CAPACITY_UNAVAILABLE
+            - TASK_LEASE_EXHAUSTED
+            - INTERNAL_ERROR
+        retryable:
+          type: boolean
+        executionCount:
+          type: integer
+          minimum: 1
+          maximum: 4294967295
+    ShareCreatedProperties:
+      type: object
+      additionalProperties: false
+      required: [lifetimeDays]
+      properties:
+        lifetimeDays:
+          type: integer
+          minimum: 1
+          maximum: 90

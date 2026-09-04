@@ -1,0 +1,216 @@
+name: ${COMPOSE_PROJECT_NAME:-game-gen-prod}
+
+x-app-environment: &app-environment
+  APP_ENVIRONMENT: production
+  APP_BASE_URL: https://${APP_DOMAIN:?Set APP_DOMAIN}
+  PLAY_BASE_URL: https://${PLAY_DOMAIN:?Set PLAY_DOMAIN}
+  SERVICE_SURFACE: all
+  HTTP_ADDRESS: :8080
+  WEB_STATIC_DIR: /app/public
+  TRUST_PROXY_HEADERS: "true"
+  WORKER_HEALTH_ADDRESS: :8081
+  WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-5s}
+  GENERATION_LEASE_DURATION: ${GENERATION_LEASE_DURATION:-60s}
+  GENERATION_MAX_EXECUTIONS: ${GENERATION_MAX_EXECUTIONS:-3}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DYNAMIC_AI_CONFIG_ENABLED: ${DYNAMIC_AI_CONFIG_ENABLED:-true}
+  AI_CONFIG_ENCRYPTION_KEY_V1: ${AI_CONFIG_ENCRYPTION_KEY_V1:?Set AI_CONFIG_ENCRYPTION_KEY_V1}
+  AI_CONFIG_REFRESH_INTERVAL: ${AI_CONFIG_REFRESH_INTERVAL:-2s}
+  AI_TEXT_PROVIDER: ${AI_TEXT_PROVIDER:-deepseek}
+  AI_TEXT_BASE_URL: ${AI_TEXT_BASE_URL:-https://api.deepseek.com}
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+  AI_TEXT_MODEL: ${AI_TEXT_MODEL:-deepseek-v4-flash}
+  AI_TEXT_TIMEOUT: ${AI_TEXT_TIMEOUT:-30s}
+  AI_TEXT_MAX_OUTPUT_TOKENS: ${AI_TEXT_MAX_OUTPUT_TOKENS:-2000}
+  AI_IMAGE_MODERATION_PROVIDER: ${AI_IMAGE_MODERATION_PROVIDER:-}
+  AI_IMAGE_MODERATION_BASE_URL: ${AI_IMAGE_MODERATION_BASE_URL:-}
+  AI_IMAGE_MODERATION_API_KEY: ${AI_IMAGE_MODERATION_API_KEY:-}
+  AI_IMAGE_MODERATION_MODEL: ${AI_IMAGE_MODERATION_MODEL:-}
+  AI_IMAGE_MODERATION_TIMEOUT: ${AI_IMAGE_MODERATION_TIMEOUT:-20s}
+  AI_IMAGE_MODERATION_MAX_OUTPUT_TOKENS: ${AI_IMAGE_MODERATION_MAX_OUTPUT_TOKENS:-300}
+  AI_IMAGE_TO_IMAGE_PROVIDER: ${AI_IMAGE_TO_IMAGE_PROVIDER:-}
+  AI_IMAGE_TO_IMAGE_BASE_URL: ${AI_IMAGE_TO_IMAGE_BASE_URL:-}
+  AI_IMAGE_TO_IMAGE_API_KEY: ${AI_IMAGE_TO_IMAGE_API_KEY:-}
+  AI_IMAGE_TO_IMAGE_MODEL: ${AI_IMAGE_TO_IMAGE_MODEL:-}
+  AI_IMAGE_TO_IMAGE_QUALITY: ${AI_IMAGE_TO_IMAGE_QUALITY:-medium}
+  AI_IMAGE_TO_IMAGE_TIMEOUT: ${AI_IMAGE_TO_IMAGE_TIMEOUT:-3m}
+  AI_IMAGE_TO_IMAGE_MAX_INPUT_BYTES: ${AI_IMAGE_TO_IMAGE_MAX_INPUT_BYTES:-26214400}
+  AI_IMAGE_TO_IMAGE_MAX_OUTPUT_BYTES: ${AI_IMAGE_TO_IMAGE_MAX_OUTPUT_BYTES:-26214400}
+  MYSQL_DSN: ${MYSQL_DSN:?Set MYSQL_DSN}
+  MINIO_ENDPOINT: minio:9000
+  MINIO_PUBLIC_ENDPOINT: ${ASSETS_DOMAIN:?Set ASSETS_DOMAIN}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY}
+  MINIO_REGION: ${MINIO_REGION:-us-east-1}
+  MINIO_USE_SSL: "false"
+  MINIO_PUBLIC_USE_SSL: "true"
+  ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+  ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH}
+  CONTENT_ENCRYPTION_KEY_V1: ${CONTENT_ENCRYPTION_KEY_V1:?Set CONTENT_ENCRYPTION_KEY_V1}
+  SHARE_ENCRYPTION_KEY_V1: ${SHARE_ENCRYPTION_KEY_V1:?Set SHARE_ENCRYPTION_KEY_V1}
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [game-gen]
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
+
+services:
+  mysql:
+    <<: *service-defaults
+    image: mysql:8.4.10
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gamegen}
+      MYSQL_USER: ${MYSQL_USER:-gamegen}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'mysqladmin ping --host=127.0.0.1 --user=root --password="$${MYSQL_ROOT_PASSWORD}" --silent']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    stop_grace_period: 1m
+
+  minio:
+    <<: *service-defaults
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      TZ: UTC
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: [CMD-SHELL, 'curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    stop_grace_period: 30s
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [setup]
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY}
+    volumes:
+      - ./minio-app-policy.json:/config/minio-app-policy.json:ro
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        for bucket in gamegen-user-assets gamegen-source-assets gamegen-render-assets gamegen-artifacts; do
+          mc mb --ignore-existing "local/$${bucket}"
+          mc anonymous set none "local/$${bucket}"
+        done
+        if ! mc admin user info local "$${MINIO_ACCESS_KEY}" >/dev/null 2>&1; then
+          mc admin user add local "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}"
+        fi
+        if ! mc admin policy info local gamegen-app >/dev/null 2>&1; then
+          mc admin policy create local gamegen-app /config/minio-app-policy.json
+        fi
+        mc admin policy attach local gamegen-app --user "$${MINIO_ACCESS_KEY}"
+    networks: [game-gen]
+
+  migrate:
+    image: ${GAMEGEN_IMAGE:?Set GAMEGEN_IMAGE}
+    profiles: [tools]
+    restart: "no"
+    entrypoint: [/app/migrate]
+    command: [-command, up, -path, /app/migrations]
+    environment:
+      APP_ENVIRONMENT: production
+      MYSQL_DSN: ${MYSQL_DSN:?Set MYSQL_DSN}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [game-gen]
+
+  app:
+    <<: *service-defaults
+    image: ${GAMEGEN_IMAGE:?Set GAMEGEN_IMAGE}
+    init: true
+    entrypoint: [/app/api]
+    environment: *app-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget --quiet --spider http://127.0.0.1:8080/health/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 30s
+
+  worker:
+    <<: *service-defaults
+    image: ${GAMEGEN_IMAGE:?Set GAMEGEN_IMAGE}
+    init: true
+    entrypoint: [/app/worker]
+    environment: *app-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget --quiet --spider http://127.0.0.1:8081/health/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 1m
+
+  proxy:
+    <<: *service-defaults
+    image: caddy:2.10.0-alpine
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+      PLAY_DOMAIN: ${PLAY_DOMAIN:?Set PLAY_DOMAIN}
+      ASSETS_DOMAIN: ${ASSETS_DOMAIN:?Set ASSETS_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+networks:
+  game-gen:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  minio-data:
+  caddy-data:
+  caddy-config:

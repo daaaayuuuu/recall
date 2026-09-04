@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+**/.DS_Store
+**/node_modules
+**/dist
+**/coverage
+**/*.test
+**/*.out
+game-gen-env
+

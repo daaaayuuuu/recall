@@ -1,0 +1,46 @@
+{
+	email {$ACME_EMAIL}
+}
+
+(security_headers) {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; img-src 'self' data: blob: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+	}
+}
+
+{$APP_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+	reverse_proxy app:8080
+}
+
+{$PLAY_DOMAIN} {
+	import security_headers
+	encode zstd gzip
+
+	handle /api/v1/public/* {
+		reverse_proxy app:8080
+	}
+	handle /api/* {
+		respond 404
+	}
+	handle /play/* {
+		reverse_proxy app:8080
+	}
+	handle /assets/* {
+		reverse_proxy app:8080
+	}
+	handle {
+		respond 404
+	}
+}
+
+{$ASSETS_DOMAIN} {
+	import security_headers
+	reverse_proxy minio:9000
+}

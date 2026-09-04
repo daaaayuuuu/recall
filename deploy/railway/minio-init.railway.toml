@@ -1,0 +1,4 @@
+# Railway service-specific build configuration for the one-shot MinIO bootstrap.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "deploy/railway/minio-init.Dockerfile"
